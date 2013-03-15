@@ -22,6 +22,12 @@ const int SABER_MOTOR2_FULL_REVERSE = 128;
 const int SABER_MOTOR2_FULL_STOP = 192;
 const int ALLSTOP = 0;
 
+int i = 0; //control motor speed
+int type;  //determines type of stop
+int stopsig = 1; //determines if motors are in stopped state
+int dir = 0; //0 = Forward 1 = Backward
+signed int onespeed, twospeed; //speed of motor 1 and 2
+
 SoftwareSerial SaberSerial = SoftwareSerial( SABERREC, SABERSEND );
 
 ////////////////////////////////////////////////////////////////////////////////////
@@ -66,10 +72,76 @@ void setEngineSpeed( signed char cNewMotorSpeed )
 
   SaberSerial.write((byte) cSpeedVal_Motor2 );
 }
+/////////////////////////////////////////////////////////////////////////////////
+void stopProcedure( int select)
+{ signed char traverse;
+  switch(select)
+  {
+    case 0:
+      if(i < 0){
+            for (i; i <= 0; i++){
+            traverse = i;
+            setEngineSpeed( traverse ); 
+            delay(30);
+            }
+          } 
+          else{
+            for (i; i >= 0; i--){
+              traverse = i;
+              setEngineSpeed( traverse ); 
+              delay(40);
+            }
+          } break;
+    case 1:
+      if(onespeed>SABER_MOTOR1_FULL_STOP){
+        for (onespeed; onespeed > SABER_MOTOR1_FULL_STOP; onespeed--){
+          if(twospeed > SABER_MOTOR2_FULL_STOP){
+            twospeed = twospeed--;
+            SaberSerial.write((byte)twospeed);
+          }
+          SaberSerial.write((byte)onespeed);
+          delay(30);
+        }
+      }
+      else{
+        for (onespeed; onespeed < SABER_MOTOR1_FULL_STOP; onespeed++){
+          if(twospeed < SABER_MOTOR2_FULL_STOP){
+            twospeed = twospeed++;
+            SaberSerial.write((byte)twospeed);
+          }
+          SaberSerial.write((byte)onespeed);
+          delay(30);
+        }
+      }
+    break;
+    case 2:
+      if(twospeed>SABER_MOTOR2_FULL_STOP){
+        for (twospeed; twospeed > SABER_MOTOR2_FULL_STOP; twospeed--){
+          if(onespeed > SABER_MOTOR1_FULL_STOP){
+            onespeed = onespeed--;
+            SaberSerial.write((byte)onespeed);
+          }
+          SaberSerial.write((byte)twospeed);
+          delay(30);
+        }
+      }
+      else{
+        for (twospeed; twospeed < SABER_MOTOR2_FULL_STOP; twospeed++){
+          if(onespeed < SABER_MOTOR1_FULL_STOP){
+            onespeed = onespeed++;
+            SaberSerial.write((byte)onespeed);
+          }
+          SaberSerial.write((byte)twospeed);
+          delay(30);
+        } 
+      } break;
+  }
+}
+      
 ////////////////////////////////////////////////////////////////////////////////////
 
-int i = 0;
-int type;
+
+
 void setup() {
   pinMode( SABERSEND, OUTPUT );
   // Open serial communications and wait for port to open:
@@ -92,7 +164,9 @@ void loop() {
     switch(data)
     {  
       case'F':
+        stopsig = 0;
         type = 0;
+        dir = 0;
         for (i; i <= 100; i++){
           traverse = i;
           setEngineSpeed( traverse ); 
@@ -100,95 +174,304 @@ void loop() {
         } break; // Forward
         
       case'B':
-        type = 0;
+        dir = 1;
+        stopsig = 0;
+        if (type == 1){
+          i=0;
+          signed int onespeeddif = abs(onespeed - 64);
+          signed int twospeeddif = abs(twospeed - 192);
+          if(onespeeddif > twospeeddif)
+            stopProcedure(1);
+          else if(onespeeddif < twospeeddif)
+            stopProcedure(2); 
+        }
         for (i; i >= -100; i--){
           traverse = i;
           setEngineSpeed( traverse ); 
-          delay(40);
-          } break; // Reverse
+          delay(30);
+        }
+        break; // Reverse
       
       case'S':
-        if(type == 0){ 
-          if(i < 0){
-            for (i; i <= 0; i++){
-            traverse = i;
-            setEngineSpeed( traverse ); 
-            delay(30);
-            }
-          } 
-          else{
-            for (i; i >= 0; i--){
-              traverse = i;
-              setEngineSpeed( traverse ); 
-              delay(40);
-            }
-          }
-        }
-        else if (type == 1){
+        dir = 0;
+        if (type == 1){
           i=0;
-          SaberSerial.write((byte)ALLSTOP);
-        } break;
+          signed int onespeeddif = abs(onespeed - 64);
+          signed int twospeeddif = abs(twospeed - 192);
+          if(onespeeddif > twospeeddif)
+            stopProcedure(1);
+          else if(onespeeddif < twospeeddif)
+            stopProcedure(2); 
+          stopsig = 1;
+        }
+        else
+          stopProcedure(0); 
+        break;
    /////////////////////////////////////////////     
       case'4':
-        type = 0;
-        i=80;
+        type = 1;
+        if(dir == 1){
+          stopProcedure(0);
+          stopsig = 1;
+          dir = 0;
+        }
+        if(stopsig == 1){
+          int k = 192;
+          for(int j = 64; j <= SABER_MOTOR1_FULL_FORWARD; j++){
+            if(k<SABER_MOTOR2_TURN_FOUR){
+              k = k++;
+              SaberSerial.write((byte) k);
+            }
+            SaberSerial.write((byte) j);
+            delay(30);
+          }
+          stopsig = 0;
+        }
+        else{
         SaberSerial.write((byte) SABER_MOTOR1_FULL_FORWARD);
         SaberSerial.write((byte) SABER_MOTOR2_TURN_FOUR );
+        }
+        onespeed = SABER_MOTOR1_FULL_FORWARD;
+        twospeed = SABER_MOTOR2_TURN_FOUR;
+        i=80;
         break;  //18 degree left turn
         
       case'3':
         type = 1;
+        if(dir == 1){
+          stopProcedure(0);
+          stopsig = 1;
+          dir = 0;
+        }
+        if(stopsig == 1){
+          int k = 192;
+          for(int j = 64; j <= SABER_MOTOR1_FULL_FORWARD; j++){
+            if(k<SABER_MOTOR2_TURN_THREE){
+              k = k++;
+              SaberSerial.write((byte) k);
+            }
+            SaberSerial.write((byte) j);
+            delay(30);
+          }
+          stopsig = 0;
+        }
+        else{
         SaberSerial.write((byte) SABER_MOTOR1_FULL_FORWARD);
         SaberSerial.write((byte) SABER_MOTOR2_TURN_THREE );
+        }
+        onespeed = SABER_MOTOR1_FULL_FORWARD;
+        twospeed = SABER_MOTOR2_TURN_THREE;
         break;  //36 degree left turn
         
       case'2':
         type = 1;
+        if(dir == 1){
+          stopProcedure(0);
+          stopsig = 1;
+          dir = 0;
+        }
+        if(stopsig == 1){
+          int k = 192;
+          for(int j = 64; j <= SABER_MOTOR1_FULL_FORWARD; j++){
+            if(k<SABER_MOTOR2_TURN_TWO){
+              k = k++;
+              SaberSerial.write((byte) k);
+            }
+            SaberSerial.write((byte) j);
+            delay(30);
+          }
+          stopsig = 0;
+        }
+        else{
         SaberSerial.write((byte) SABER_MOTOR1_FULL_FORWARD);
         SaberSerial.write((byte) SABER_MOTOR2_TURN_TWO );
+        }
+        onespeed = SABER_MOTOR1_FULL_FORWARD;
+        twospeed = SABER_MOTOR2_TURN_TWO;
         break;  //54 degree left turn
         
       case'1':
         type = 1;
+        if(dir == 1){
+          stopProcedure(0);
+          stopsig = 1;
+          dir = 0;
+        }
+        if(stopsig == 1){
+          int k = 192;
+          for(int j = 64; j <= SABER_MOTOR1_FULL_FORWARD; j++){
+            if(k<SABER_MOTOR2_TURN_ONE){
+              k = k++;
+              SaberSerial.write((byte) k);
+            }
+            SaberSerial.write((byte) j);
+            delay(30);
+          }
+          stopsig = 0;
+        }
+        else{
         SaberSerial.write((byte) SABER_MOTOR1_FULL_FORWARD);
         SaberSerial.write((byte) SABER_MOTOR2_TURN_ONE );
+        }
+        onespeed = SABER_MOTOR1_FULL_FORWARD;
+        twospeed = SABER_MOTOR2_TURN_ONE;
         break;  //72 degree left turn
  
       case'0':
         type = 1;
+        if(dir == 1){
+          stopProcedure(0);
+          stopsig = 1;
+          dir = 0;
+        }
+        if(stopsig == 1){
+          SaberSerial.write((byte) SABER_MOTOR2_FULL_STOP );
+          for(int j = 64; j <= SABER_MOTOR1_FULL_FORWARD; j++){
+            SaberSerial.write((byte) j);
+            delay(30);
+          }
+          stopsig = 0;
+        }
+        else{
         SaberSerial.write((byte) SABER_MOTOR1_FULL_FORWARD);
         SaberSerial.write((byte) SABER_MOTOR2_FULL_STOP );
+        }
+        onespeed = SABER_MOTOR1_FULL_FORWARD;
+        twospeed = SABER_MOTOR2_FULL_STOP;
         break;  //90 degree left turn
      ///////////////////////////////////////////
       case'5':
-        type = 0;
-        i=80;
+        type = 1;
+        if(dir == 1){
+          stopProcedure(0);
+          stopsig = 1;
+          dir = 0;
+        }
+        if(stopsig == 1){
+          int k = 64;
+          for(int j = 192; j <= SABER_MOTOR2_FULL_FORWARD; j++){
+            if(k<SABER_MOTOR1_TURN_FIVE){
+              k = k++;
+              SaberSerial.write((byte) k);
+            }
+            SaberSerial.write((byte) j);
+            delay(30);
+          }
+          stopsig = 0;
+        }
+        else{
         SaberSerial.write((byte) SABER_MOTOR2_FULL_FORWARD);
         SaberSerial.write((byte) SABER_MOTOR1_TURN_FIVE );
+        }
+        onespeed = SABER_MOTOR1_TURN_FIVE;
+        twospeed = SABER_MOTOR2_FULL_FORWARD;
+        i=80;
         break;  //18 degree right turn
         
       case'6':
         type = 1;
+        if(dir == 1){
+          stopProcedure(0);
+          stopsig = 1;
+          dir = 0;
+        }
+        if(stopsig == 1){
+          int k = 64;
+          for(int j = 192; j <= SABER_MOTOR2_FULL_FORWARD; j++){
+            if(k<SABER_MOTOR1_TURN_SIX){
+              k = k++;
+              SaberSerial.write((byte) k);
+            }
+            SaberSerial.write((byte) j);
+            delay(30);
+          }
+          stopsig = 0;
+        }
+        else{
         SaberSerial.write((byte) SABER_MOTOR2_FULL_FORWARD);
         SaberSerial.write((byte) SABER_MOTOR1_TURN_SIX );
+        }
+        onespeed = SABER_MOTOR1_TURN_SIX;
+        twospeed = SABER_MOTOR2_FULL_FORWARD;
         break;  //36 degree right turn
         
       case'7':
-        type = 1;
+        type = 1; //alt stop signal
+        if(dir == 1){
+          stopProcedure(0);
+          stopsig = 1;
+          dir = 0;
+        }
+        if(stopsig == 1){
+          int k = 64;
+          for(int j = 192; j <= SABER_MOTOR2_FULL_FORWARD; j++){
+            if(k<SABER_MOTOR1_TURN_SEVEN){
+              k = k++;
+              SaberSerial.write((byte) k);
+            }
+            SaberSerial.write((byte) j);
+            
+            delay(30);
+          }
+          stopsig = 0;
+        }
+        else{
         SaberSerial.write((byte) SABER_MOTOR2_FULL_FORWARD);
         SaberSerial.write((byte) SABER_MOTOR1_TURN_SEVEN );
+        }
+        onespeed = SABER_MOTOR1_TURN_SEVEN;
+        twospeed = SABER_MOTOR2_FULL_FORWARD;
         break;  //54 degree right turn
         
       case'8':
         type = 1;
+        if(dir == 1){
+          stopProcedure(0);
+          stopsig = 1;
+          dir = 0;
+        }
+        if(stopsig == 1){
+          int k = 64;  //motor 1 stop bit
+          for(int j = 192; j <= SABER_MOTOR2_FULL_FORWARD; j++){
+            if(k<SABER_MOTOR1_TURN_EIGHT){
+              k = k++;
+              SaberSerial.write((byte) k);
+            }
+            SaberSerial.write((byte) j);
+            delay(30);
+          }
+          stopsig = 0;
+        }
+        else{
         SaberSerial.write((byte) SABER_MOTOR2_FULL_FORWARD);
         SaberSerial.write((byte) SABER_MOTOR1_TURN_EIGHT );
+        }
+        onespeed = SABER_MOTOR1_TURN_EIGHT;
+        twospeed = SABER_MOTOR2_FULL_FORWARD;
         break;  //72 degree right turn
         
       case'9':
         type = 1;
+        //if motors are at zero
+        if(dir == 1){
+          stopProcedure(0);
+          stopsig = 1;
+          dir = 0;
+        }
+        if(stopsig == 1){
+          SaberSerial.write((byte) SABER_MOTOR1_FULL_STOP);
+          for(int j = 192; j <= SABER_MOTOR2_FULL_FORWARD; j++){
+            SaberSerial.write((byte) j);
+            delay(30);
+          }
+          stopsig = 0;
+        }
+        else{
         SaberSerial.write((byte) SABER_MOTOR2_FULL_FORWARD);
         SaberSerial.write((byte) SABER_MOTOR1_FULL_STOP );
+        }
+        onespeed = SABER_MOTOR1_FULL_STOP;
+        twospeed = SABER_MOTOR2_FULL_FORWARD;
         break;  //90 degree right turn
     }
 
